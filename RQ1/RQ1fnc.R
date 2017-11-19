@@ -51,11 +51,9 @@ same_day_releases_pattern_2.par = function(releases, dependencies, threads = 4){
 ####################################
 
 month_snaps = function(same_day_pt1, same_day_pt2){
-  #calculate proportion of same-day releases for packages
-  
   #get packages grouped by timestamp
   packages.pt1 = same_day_pt1[, .(num_releases = .N, type = "pattern1"), by = .(pkg_name = package_name, timestamp = floor_date(ymd_hms(package_version_timestamp_2), "month"))]
-  packages.pt2 = same_day_pt2[,.(.GRP), by = .(client_name, client_version_num_1, client_version_timestamp_1, client_version_timestamp_2, client_version_num_2, dependency_name)][, .(num_releases = .N, type = "pattern2"), by = .(pkg_name = client_name, timestamp = floor_date(ymd_hms(client_version_timestamp_2), "month"))]
+  packages.pt2 = same_day_pt2[, .(num_releases = .N, type = "pattern2"), by = .(pkg_name = client_name, timestamp = floor_date(ymd_hms(client_version_timestamp_2), "month"))]
   
   #pkg_per_month.pt1 = unique(packages.pt1[, .(pkg_per_month = .N), by = .(timestamp)][order(timestamp)])
   #packages.pt1 = merge(packages.pt1, pkg_per_month.pt1)
@@ -64,18 +62,24 @@ month_snaps = function(same_day_pt1, same_day_pt2){
   #packages.pt2 = merge(packages.pt2, pkg_per_month.pt2)
   
   sdr = rbind(packages.pt1, packages.pt2)
-
+  
   #count how many same-day releases is occurring by month
-  sdr.type.count = sdr[, .(num_pgks = .N, num_releases = sum(num_releases)), by = .(type, timestamp)]
+  sdr.type.count = sdr[, .(num_pgks = .N, num_rel = sum(num_releases)), by = .(type, timestamp)]
   
   #put the data in a format to easily calculate proportion
-  sdr.c = as.data.table(dcast(data = sdr.type.count, formula = ... ~ type, fun.aggregate = sum, value.var = c("num_pgks", "num_releases")))
-
+  sdr.c = as.data.table(data.table::dcast(data = sdr.type.count, formula = ... ~ type, fun.aggregate = sum, value.var = c("num_pgks", "num_rel")))
+  
   sdr.c$num_pgks_pattern1_proportion = (sdr.c$num_pgks_pattern1 / (sdr.c$num_pgks_pattern1 + sdr.c$num_pgks_pattern2))
   sdr.c$num_pgks_pattern2_proportion = (sdr.c$num_pgks_pattern2 / (sdr.c$num_pgks_pattern1 + sdr.c$num_pgks_pattern2))
   
-  sdr.c$releases_per_pgks_pattern1 = ifelse(sdr.c$num_pgks_pattern1 == 0, 0, sdr.c$num_releases_pattern1 / sdr.c$num_pgks_pattern1)
-  sdr.c$releases_per_pgks_pattern2 = ifelse(sdr.c$num_pgks_pattern2 == 0, 0, sdr.c$num_releases_pattern2 / sdr.c$num_pgks_pattern2)
+  sdr.c$releases_per_pgks_pattern1 = ifelse(sdr.c$num_pgks_pattern1 == 0, 0, sdr.c$num_rel_pattern1 / sdr.c$num_pgks_pattern1)
+  sdr.c$releases_per_pgks_pattern2 = ifelse(sdr.c$num_pgks_pattern2 == 0, 0, sdr.c$num_rel_pattern2 / sdr.c$num_pgks_pattern2)
+  
+  sdr.c.m = sdr.c[, .(num_packages_releases = (sum(num_rel_pattern1) + sum(num_rel_pattern2))), by = timestamp]
+  sdr.c = merge(sdr.c, sdr.c.m)
+  
+  sdr.c$same_day_1_per_total_releases = (sdr.c$num_rel_pattern1 / sdr.c$num_packages_releases)
+  sdr.c$same_day_2_per_total_releases = (sdr.c$num_rel_pattern2 / sdr.c$num_packages_releases)
   
   return(sdr.c)
 }
@@ -138,3 +142,77 @@ client_releases_changing_from_same_day_release_ptrn1 = function(dependencies, sa
   
   return(clients_releases_using_same_day_release_ptrn1)
 }
+
+####################################
+### Calculate the regular and same-day 
+### releases on pattern 1
+####################################
+
+regular_same_day_releases_pt1 = function(sdrpt1, rels){
+  setkey(sdrpt1, package_name, package_version_num_1, package_version_num_2)
+  setkey(rels, package_name, package_version_num_1, package_version_num_2)
+  
+  # find elements that are in 'rels' but not on 'sdrpt1'
+  sdr1.diff = rels[!sdrpt1]
+  # find elements that are in 'rels' but not on 'sdr1.diff'
+  sdr1.eq = rels[!sdr1.diff]
+  
+  # check if it's all right
+  nrow(rels) == nrow(sdrpt1) + nrow(sdr1.diff)
+  nrow(rels) == nrow(sdr1.eq) + nrow(sdr1.diff)
+  
+  # create columns with values for same-day release flag
+  sdr1.diff$same_day_1 = FALSE
+  sdr1.eq$same_day_1 = TRUE
+  
+  # bind rows from both tables
+  sdr1 = rbind(sdr1.diff, sdr1.eq)
+  
+  return(sdr1)
+}
+
+
+####################################
+### Calculate the regular and same-day 
+### releases on pattern 2
+####################################
+
+regular_same_day_releases_pt2 = function(sdrpt2, deps){
+  #fetch clients performing same-day release on pattern 2
+  clients_performing_sdr2 = sdrpt2[, .(num_releases = .N), by = .(name = client_name)]$name
+  
+  # fetch only the clients on 'deps' tables and aggregate the provider packages
+  deps.cli = deps[, .(.GRP), by = .(client_name, client_version_num_1, client_version_num_2, client_version_timestamp_1, client_version_timestamp_2)]
+  
+  # keep on 'deps.cli' only the packages performing same-day release on pattern 2
+  deps.cli = deps.cli[client_name %in% clients_performing_sdr2]
+  
+  # set key for join tables
+  setkey(sdrpt2, client_name, client_version_num_1, client_version_num_2, client_version_timestamp_1, client_version_timestamp_2)
+  setkey(deps.cli, client_name, client_version_num_1, client_version_num_2, client_version_timestamp_1, client_version_timestamp_2)
+  
+  # find elements that are in 'deps' but not on 'same_day_releases_pattern_2'
+  sdr2.diff = deps.cli[!sdrpt2]
+  # find elements that are in 'deps' but not on 'sdr2.diff'
+  sdr2.eq = deps.cli[!sdr2.diff]
+  
+  # check if it's all right
+  nrow(deps.cli) - (nrow(sdrpt2) + nrow(sdr2.diff))
+  nrow(deps.cli) == nrow(sdrpt2) + nrow(sdr2.diff)
+  nrow(deps.cli) == nrow(sdr2.eq) + nrow(sdr2.diff)
+  
+  # create columns with values for same-day release flag
+  sdr2.diff$same_day_2 = FALSE
+  sdr2.eq$same_day_2 = TRUE
+  
+  # bind rows from both tables
+  sdr2 = rbind(sdr2.diff, sdr2.eq)
+  
+  return(sdr2)
+}
+
+
+month_snaps_regular_same_day_releases = function(rels1, rels2){
+  
+}
+

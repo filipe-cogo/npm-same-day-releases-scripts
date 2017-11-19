@@ -107,6 +107,9 @@ dependencies.clean = dependencies[, .(
   steady
 )]
 
+# insert information about same-day releases pattern 2
+dependencies.clean[, same_day_release_2 := difftime(ymd_hms(client_version_timestamp_2), ymd_hms(dependency_timestamp_max_satisf_2), unit = "secs") <= 86400  & upgrade == TRUE]
+
 # keep on table 'releases' only client packages being used more than 100 times
 releases = releases[package_name %in% providers.keep$dependency_name]
 
@@ -123,10 +126,12 @@ releases.clean = releases[,.(
   package_version_timestamp_diff_secs
 )]
 
+# insert information about same-day releases pattern 1
+releases.clean = releases.clean[, same_day_release_1 := package_version_timestamp_diff_secs <= 86400]
 
 # save cleaned dataset
-write.csv(releases.clean, file = "final/popular_packages_releases.csv")
-write.csv(dependencies.clean, file = "final/popular_packages_dependencies.csv")
+write.csv(releases.clean, file = "popular-packages-releases.csv")
+write.csv(dependencies.clean, file = "popular-packages-dependencies.csv")
 
 # fetch cleaned dataset
 #releases = fread("datasets/clean_releases.csv")
@@ -134,7 +139,7 @@ write.csv(dependencies.clean, file = "final/popular_packages_dependencies.csv")
 
 ############
 ### Calculate same-day releases pattern 1
-same_day_releases_pattern_1 = releases[package_version_timestamp_diff_secs <= 86400]
+same_day_releases_pattern_1 = releases.clean[package_version_timestamp_diff_secs <= 86400]
 #same_day_releases_pattern_1 = releases[difftime(ymd_hms(package_version_timestamp_2), ymd_hms(package_version_timestamp_1), "secs") <= 86400]
 
 # keep only usefull fields
@@ -150,13 +155,15 @@ same_day_releases_pattern_1.clean = same_day_releases_pattern_1[,.(
   package_version_timestamp_diff_secs
 )]
 
+
 ############
 ### Calculate same-day releases pattern 2
 # How many client packages releases an update within 24hrs
 # of an update that was released by one of it's supllier packages?
 
 #same_day_releases_pattern_2 = same_day_releases_pattern_2.par(releases, dependencies, threads = 20)
-same_day_releases_pattern_2 = fread("pattern-2-same-day-releases.csv")
+same_day_releases_pattern_2 = dependencies.clean[(difftime(ymd_hms(client_version_timestamp_2), ymd_hms(dependency_timestamp_max_satisf_2), unit = "secs") <= 86400)]
+#same_day_releases_pattern_2 = fread("pattern-2-same-day-releases.csv")
 same_day_releases_pattern_2 = same_day_releases_pattern_2[steady == FALSE]
 same_day_releases_pattern_2 = same_day_releases_pattern_2[rollback == FALSE]
 
@@ -196,7 +203,7 @@ same_day_releases_pattern_2_providers  = same_day_releases_pattern_2.clean[, .(n
 
 ############
 ### Save the tables with same-day releases
-write.csv(same_day_releases_pattern_1, "final/pattern-1-same-day-releases.csv")
-write.csv(same_day_releases_pattern_2.clean, "final/pattern-2-same-day-releases.csv")
-write.csv(same_day_releases_pattern_2_clients, "final/pattern-2-same-day-releases-clients.csv")
-write.csv(same_day_releases_pattern_2_providers, "final/pattern-2-same-day-releases-providers.csv")
+write.csv(same_day_releases_pattern_1.clean, "pattern-1-same-day-releases.csv")
+write.csv(same_day_releases_pattern_2.clean, "pattern-2-same-day-releases.csv")
+write.csv(same_day_releases_pattern_2_clients, "pattern-2-same-day-releases-clients.csv")
+write.csv(same_day_releases_pattern_2_providers, "pattern-2-same-day-releases-providers.csv")

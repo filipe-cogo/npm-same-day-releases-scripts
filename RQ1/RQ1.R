@@ -1,7 +1,3 @@
-wd1 = "/Users/filipe/Dropbox/same_day_releases_npm"
-wd2 = "/home/local/SAIL/filipe-cogo/Dropbox/same_day_releases_npm"
-setwd(wd2)
-
 set.seed(21)
 
 options(scipen = 999)
@@ -9,8 +5,8 @@ options(scipen = 999)
 library(data.table)
 library(doParallel)
 library(ggplot2)
-library(scales)
 library(gridExtra)
+library(scales)
 library(lubridate)
 library(stats)
 library(rms)
@@ -18,121 +14,38 @@ library(randomForest)
 library(xtable)
 library(viridis)
 
-source("RQ1/scripts/RQ1fnc.R")
-
 #############################################
 ### Read CSV dataset
 #############################################
+
+wd = "/Users/filipe/Dropbox/npm-same-day-releases-data"
+setwd(wd)
 
 ######################
 ### Read CSV dataset
 
-dependencies = fread(input="datasets/npmdep.csv", header=TRUE, sep=",")
-releases = fread(input="datasets/npmreleases.csv", 
-                 colClasses = list(
-                   numeric = c("release_order",
-                               "package_version_num_1_major", 
-                               "package_version_num_1_minor", 
-                               "package_version_num_1_patch", 
-                               "package_version_num_1_pre_release_number", 
-                               "package_version_num_1_build_number", 
-                               "package_version_num_2_major",
-                               "package_version_num_2_minor",
-                               "package_version_num_2_patch",
-                               "package_version_num_2_pre_release_number",
-                               "package_version_num_2_build_number",
-                               "package_version_timestamp_1_day",
-                               "package_version_timestamp_1_month",
-                               "package_version_timestamp_1_year",
-                               "package_version_timestamp_1_hour",
-                               "package_version_timestamp_1_minute",
-                               "package_version_timestamp_1_second",
-                               "package_version_timestamp_2_day",
-                               "package_version_timestamp_2_month",
-                               "package_version_timestamp_2_year",
-                               "package_version_timestamp_2_hour",
-                               "package_version_timestamp_2_minute",
-                               "package_version_timestamp_2_second",
-                               "package_version_timestamp_diff_secs"),
-                   character = c("package_name",
-                                 "package_version_num_1",
-                                 "package_version_num_2",
-                                 "package_version_change_was_in",
-                                 "package_version_num_1_pre_release",
-                                 "package_version_num_1_build",
-                                 "package_version_num_2_pre_release",
-                                 "package_version_num_2_build",
-                                 "package_version_timestamp_1",
-                                 "package_version_timestamp_2")), 
-                 header=TRUE, sep=",")
-
-nrow(same_day_releases_pattern_1[, .(.GRP), by = package_name])
-nrow(same_day_releases_pattern_2[, .(.GRP), by = client_name])
-nrow(same_day_releases_pattern_2[, .(.GRP), by = dependency_name])
-nrow(dependencies[, .(.GRP), by = .(client_name)])
-
-############
-### Clean data
-
-# remove cases in which client_version_timestamp_1 < client_version_timestamp_2
-# it occurs because of paralles branches being released
-releases = releases[package_version_timestamp_1 < package_version_timestamp_2, ]
-dependencies = dependencies[client_version_timestamp_1 < client_version_timestamp_2, ]
-
-# package "all-the-packages-name" has more than 
-# 3000 releases and is a toy package 
-dependencies = dependencies[client_name != "all-the-package-names", ]
-releases = releases[package_name != "all-the-package-names", ]
-
-# remove provider packages being used less than 100 times
-providers.keep = dependencies[, .(.GRP), by = .(dependency_name, client_name)][, .(count = .N), by = dependency_name][count >= 100]
-
-# clean dependencies
-dependencies.clean = dependencies[dependency_name %in% providers.keep$dependency_name, ]
-dependencies = dependencies.clean
-
-# clean releases
-releases.clean = releases[package_name %in% providers.keep$dependency_name, ]
-releases = releases.clean
-
-# save cleaned dataset
-#write.csv(releases, file = "datasets/clean_releases.csv")
-#write.csv(dependencies, file = "datasets/clean_dependencies.csv")
-
-# fetch cleaned dataset
-releases = fread("datasets/clean_releases.csv")
-dependencies = fread("datasets/clean_dependencies.csv")
-
-############
-### Calculate same-day releases pattern 1
-
-same_day_releases_pattern_1 = releases[package_version_timestamp_diff_secs <= 86400]
-#same_day_releases_pattern_1 = releases[difftime(ymd_hms(package_version_timestamp_2), ymd_hms(package_version_timestamp_1), "secs") <= 86400]
-
-############
-### Calculate same-day releases pattern 2
-# How many client packages releases an update within 24hrs
-# of an update that was released by one of it's supllier packages?
-
-#same_day_releases_pattern_2 = same_day_releases_pattern_2.par(releases, dependencies, threads = 20)
-same_day_releases_pattern_2 = dependencies[difftime(ymd_hms(package_version_timestamp_1), ymd_hms(client_version_timestamp_1)) <= 86400 & difftime(ymd_hms(package_version_timestamp_2), ymd_hms(client_version_timestamp_2)) <= 86400]
-#same_day_releases_pattern_2 = fread("datasets/pattern-2-same-day-releases.csv")
-same_day_releases_pattern_2 = same_day_releases_pattern_2[steady == FALSE]
-
-############
-### Save the tables with same-day releases
-# write.csv(same_day_releases_pattern_1, "datasets/pattern-1-same-day-releases.csv")
-# write.csv(same_day_releases_pattern_2, "datasets/pattern-2-same-day-releases.csv")
+dependencies = fread("popular-packages-dependencies.csv")
+releases = fread("popular-packages-releases.csv")
+releases.full = fread("npmreleases.csv")
+same_day_releases_pattern_1 = fread("pattern-1-same-day-releases.csv")
+same_day_releases_pattern_2.deps = fread("pattern-2-same-day-releases-2.csv")
+same_day_releases_pattern_2.cli = fread("pattern-2-same-day-releases-clients.csv")
+same_day_releases_pattern_2.prov = fread("pattern-2-same-day-releases-providers.csv")
 
 
 #####################################################################
 ### RQ.1. What are the characteristics of same-day releases on npm ?
 #####################################################################
 
+wd = "/Users/filipe/Dropbox/npm-same-day-releases-scripts"
+setwd(wd)
+
+source("RQ1/RQ1fnc.R")
+
 #####################
 ### 1) How often do same-day releases occur on npm?
 
-### Boxplot showing the distribution of different patterns of same-day releases
+### 1.1) Boxplot showing the distribution of different patterns of same-day releases
 
 ### For pattern 1
 # set key for join tables
@@ -143,6 +56,12 @@ setkey(releases, package_name, package_version_num_1, package_version_num_2)
 sdr1.diff = releases[!same_day_releases_pattern_1]
 # find elements that are in 'releases' but not on 'sdr1.diff'
 sdr1.eq = releases[!sdr1.diff]
+
+releases.test = releases
+releases.test$type = ifelse(difftime(releases.test$package_version_timestamp_2, releases.test$package_version_timestamp_1) <= 86400, "sd", "reg")
+
+
+
 
 # check if it's all right
 nrow(releases) == nrow(same_day_releases_pattern_1) + nrow(sdr1.diff)
@@ -171,18 +90,29 @@ sdr1.count.sd[, prop_specific_releases := (num_specific_releases / num_releases)
 sdr1.count = unique(rbind(sdr1.count.reg, sdr1.count.sd))
 
 ### For pattern 2
+
+#fetch clients performing same-day release on pattern 2
+clients_performing_sdr2 = same_day_releases_pattern_2.cli[, .(num_releases = .N), by = .(name = client_name)]$name
+
+# fetch only the clients on 'dependencies' tables and aggregate the provider packages
+dependencies.cli = dependencies[, .(.GRP), by = .(client_name, client_version_num_1, client_version_num_2)]
+
+# keep on 'dependencies.cli' only the packages performing same-day release on pattern 2
+dependencies.cli = dependencies.cli[client_name %in% clients_performing_sdr2]
+
 # set key for join tables
-setkey(same_day_releases_pattern_2, client_name, client_version_num_1, client_version_num_2, dependency_name, dependency_version_max_satisf_1, dependency_version_max_satisf_2)
-setkey(dependencies, client_name, client_version_num_1, client_version_num_2, dependency_name, dependency_version_max_satisf_1, dependency_version_max_satisf_2)
+setkey(same_day_releases_pattern_2.cli, client_name, client_version_num_1, client_version_num_2)
+setkey(dependencies.cli, client_name, client_version_num_1, client_version_num_2)
 
 # find elements that are in 'dependencies' but not on 'same_day_releases_pattern_2'
-sdr2.diff = dependencies[!same_day_releases_pattern_2]
+sdr2.diff = dependencies.cli[!same_day_releases_pattern_2.cli]
 # find elements that are in 'dependencies' but not on 'sdr2.diff'
-sdr2.eq = dependencies[!sdr2.diff]
+sdr2.eq = dependencies.cli[!sdr2.diff]
 
 # check if it's all right
-nrow(dependencies) == nrow(same_day_releases_pattern_2) + nrow(sdr2.diff)
-nrow(dependencies) == nrow(sdr2.eq) + nrow(sdr2.diff)
+nrow(dependencies.cli) - (nrow(same_day_releases_pattern_2.cli) + nrow(sdr2.diff))
+nrow(dependencies.cli) == nrow(same_day_releases_pattern_2.cli) + nrow(sdr2.diff)
+nrow(dependencies.cli) == nrow(sdr2.eq) + nrow(sdr2.diff)
 
 # create columns with values for same-day release flag
 sdr2.diff$same_day_2 = FALSE
@@ -211,12 +141,11 @@ sdr2.count = unique(rbind(sdr2.count.reg, sdr2.count.sd))
 wilcox.test(sdr1.count$prop_specific_releases, sdr2.count$prop_specific_releases, conf.int=TRUE)
 #t.test(sdr1.prop$proportion_sdr, sdr2.prop$proportion_sdr, conf.int=TRUE)
 
-
 sdr.prop = rbind(sdr1.count[, type := "sd1"], sdr2.count[, type := "sd2"])
 
 # plot the boxplot for the proportions
 pdf(file = "RQ1/images/dist_packages_same_day.pdf")
-#png(file = "RQ1/images/dist_packages_same_day_proportion.png")
+png(file = "RQ1/images/dist_packages_same_day.png")
 p0 = ggplot(sdr.prop, aes(x = type, y = prop_specific_releases, fill = type)) +
   geom_boxplot(position=position_dodge(1)) +
   #geom_violin(position=position_dodge(1)) +
@@ -224,7 +153,7 @@ p0 = ggplot(sdr.prop, aes(x = type, y = prop_specific_releases, fill = type)) +
   #                  labels=c("Voluntary", "Triggered"),
   #                  palette="RdBu") +
   scale_x_discrete(name = "", labels = c("Voluntary releases", "Triggered releases")) +
-  scale_y_continuous(name = "Proportion of same-day releases",
+  scale_y_continuous(name = "# same-day releases / # regular releases",
                       labels = comma) +
   #stat_summary(fun.y="median", geom="point", position = position_dodge(1)) +
   #ggtitle("Proportion of packages publishing\nsame-day releases") +
@@ -240,7 +169,7 @@ p0 = ggplot(sdr.prop, aes(x = type, y = prop_specific_releases, fill = type)) +
 p1 = ggplot(sdr.prop[same_day == TRUE], aes(x = type, y = num_specific_releases, fill = type)) +
     geom_boxplot() +
     scale_x_discrete(name = "", labels = c("Voluntary releases", "Triggered releases")) +
-    scale_y_log10(name = "Number of same-day releases",
+    scale_y_log10(name = "# same-day releases",
                   labels = comma) +
     #ggtitle("Number of packages publishing\nsame-day releases") +
     #scale_fill_brewer(name="Release type",
@@ -262,34 +191,34 @@ dev.off()
 wilcox.test(sdr1.count$prop_specific_releases, sdr2.count$prop_specific_releases)
 t.test(sdr1.count$prop_specific_releases, sdr2.count$prop_specific_releases)
 
-### Top-10 packages performing same-day releases, on both patterrns
+### 1.2) Top-10 packages performing same-day releases, on both patterrns
 
 # Calculate how many times each package publishes same-day release
 # sort by number of same-day releases
 sdp1.count = sdr1.count[type == "sd1" & same_day == TRUE][order(-num_specific_releases)][1:10][,.(name, num_releases, prop_specific_releases)]
 sdp2.count = sdr2.count[type == "sd2" & same_day == TRUE][order(-num_specific_releases)][1:10][,.(name, num_releases, prop_specific_releases)]
 
-sdp1.count.xt = xtable(sdp1.count, caption = "Number of voluntary same-day releases")
+sdp1.count.xt = xtable(sdp1.count, caption = "Proportion of voluntary same-day releases")
 digits(sdp1.count.xt) <- c(0,0,0,4)
 # for latex
-names(sdp1.count.xt) = c("\\pbox{20cm}{Package name}", "\\pbox{20cm}{Number of releases}", "\\pbox{20cm}{Proportion of same-day releases}")
-# for html
-names(sdp1.count.xt) = c("Package name", "Number of releases", "Proportion of same-day releases")
+names(sdp1.count.xt) = c("\\pbox{20cm}{Package name}", "\\pbox{20cm}{Number of same-day releases}", "\\pbox{20cm}{Proportion of same-day releases}")
 # for latex
-print(sdp1.count.xt, sanitize.colnames.function = identity, file = "RQ1/tables/top_10_clients_publishing_same_day_releases_proportion_pt1/top_10_clients_publishing_same_day_releases_proportion_pt1.tex")
+print(sdp1.count.xt, sanitize.colnames.function = identity, file = "RQ1/tables/top_10_clients_publishing_same_day_releases_proportion/top_10_clients_publishing_same_day_releases_proportion_pt1.tex")
 # for html
-print(sdp1.count.xt, type = "html", sanitize.colnames.function = identity, file = "RQ1/tables/top_10_clients_publishing_same_day_releases_pt1/top_10_clients_publishing_same_day_releases_pt1.html")
+names(sdp1.count.xt) = c("Package name", "Number of same-day releases", "Proportion of voluntary same-day releases")
+# for html
+print(sdp1.count.xt, type = "html", sanitize.colnames.function = identity, file = "RQ1/tables/top_10_clients_publishing_same_day_releases_proportion/top_10_clients_publishing_same_day_releases_pt1.html")
 
-sdp2.count.xt = xtable(sdp2.count, digits = 0, caption = "Number of triggered same-day releases")
+sdp2.count.xt = xtable(sdp2.count, digits = 0, caption = "Proportion of triggered same-day releases")
 digits(sdp2.count.xt) <- c(0,0,0,4)
 # for latex
-names(sdp2.count.xt) = c("\\pbox{20cm}{Package name}", "\\pbox{20cm}{Number of releases}", "\\pbox{20cm}{Proportion of same-day releases}")
-# for html
-names(sdp2.count.xt) = c("Package name", "Number of releases", "Proportion of same-day releases")
+names(sdp2.count.xt) = c("\\pbox{20cm}{Package name}", "\\pbox{20cm}{Number of same-day releases}", "\\pbox{20cm}{Proportion of same-day releases}")
 # for latex
-print(sdp2.count.xt, sanitize.colnames.function = identity, file = "RQ1/tables/top_10_clients_publishing_same_day_releases_proportion_pt2/top_10_clients_publishing_same_day_releases_proportion_pt2.tex")
+print(sdp2.count.xt, sanitize.colnames.function = identity, file = "RQ1/tables/top_10_clients_publishing_same_day_releases_proportion/top_10_clients_publishing_same_day_releases_proportion_pt2.tex")
 # for html
-print(sdp2.count.xt, type = "html", sanitize.colnames.function = identity, file = "RQ1/tables/top_10_clients_publishing_same_day_releases_pt2/top_10_clients_publishing_same_day_releases_pt2.html")
+names(sdp2.count.xt) = c("Package name", "Number of same-day releases", "Proportion of same-day releases")
+# for html
+print(sdp2.count.xt, type = "html", sanitize.colnames.function = identity, file = "RQ1/tables/top_10_clients_publishing_same_day_releases_proportion/top_10_clients_publishing_same_day_releases_pt2.html")
 
 # sort by proportion of same-day releases
 sdp1.prop = sdr1.count[type == "sd1" & same_day == TRUE][order(-prop_specific_releases)][1:10][,.(name, num_releases, prop_specific_releases)]
@@ -298,108 +227,83 @@ sdp2.prop = sdr2.count[type == "sd2" & same_day == TRUE][order(-prop_specific_re
 sdp1.count.xt = xtable(sdp1.prop, caption = "Proportion of voluntary same-day releases")
 digits(sdp1.count.xt) <- c(0,0,0,4)
 # for latex
-names(sdp1.count.xt) = c("\\pbox{20cm}{Package name}", "\\pbox{20cm}{Number of releases}", "\\pbox{20cm}{Proportion of same-day releases}")
-# for html
-names(sdp1.count.xt) = c("Package name", "Number of releases", "Proportion of same-day releases")
+names(sdp1.count.xt) = c("\\pbox{20cm}{Package name}", "\\pbox{20cm}{Number of same-day releases}", "\\pbox{20cm}{Proportion of same-day releases}")
 # for latex
-print(sdp1.count.xt, sanitize.colnames.function = identity, file = "RQ1/tables/top_10_clients_publishing_same_day_releases_proportion_pt1/top_10_clients_publishing_same_day_releases_proportion_pt1.tex")
+print(sdp1.count.xt, sanitize.colnames.function = identity, file = "RQ1/tables/top_10_clients_publishing_same_day_releases_total/top_10_clients_publishing_same_day_releases_total_pt1.tex")
 # for html
-print(sdp1.count.xt, type = "html", sanitize.colnames.function = identity, file = "RQ1/tables/top_10_clients_publishing_same_day_releases_proportion_pt1/top_10_clients_publishing_same_day_releases_proportion_pt1.html")
+names(sdp1.count.xt) = c("Package name", "Number of same-day releases", "Proportion of same-day releases")
+# for html
+print(sdp1.count.xt, type = "html", sanitize.colnames.function = identity, file = "RQ1/tables/top_10_clients_publishing_same_day_releases_total/top_10_clients_publishing_same_day_releases_total_pt1.html")
 
 sdp2.count.xt = xtable(sdp2.prop, digits = 0, caption = "Proportion of triggered same-day releases")
 digits(sdp1.count.xt) <- c(0,0,0,4)
 # for latex
-names(sdp1.count.xt) = c("\\pbox{20cm}{Package name}", "\\pbox{20cm}{Number of releases}", "\\pbox{20cm}{Proportion of same-day releases}")
-# for html
-names(sdp1.count.xt) = c("Package name", "Number of releases", "Proportion of same-day releases")
+names(sdp1.count.xt) = c("\\pbox{20cm}{Package name}", "\\pbox{20cm}{Number of same-day releases}", "\\pbox{20cm}{Proportion of same-day releases}")
 # for latex
-print(sdp1.count.xt, sanitize.colnames.function = identity, file = "RQ1/tables/top_10_clients_publishing_same_day_releases_proportion_pt2/top_10_clients_publishing_same_day_releases_proportion_pt2.tex")
+print(sdp1.count.xt, sanitize.colnames.function = identity, file = "RQ1/tables/top_10_clients_publishing_same_day_releases_total/top_10_clients_publishing_same_day_releases_total_pt2.tex")
 # for html
-print(sdp1.count.xt, type = "html", sanitize.colnames.function = identity, file = "RQ1/tables/top_10_clients_publishing_same_day_releases_proportion_pt2/top_10_clients_publishing_same_day_releases_proportion_pt2.html")
+names(sdp1.count.xt) = c("Package name", "Number of same-day releases", "Proportion of same-day releases")
+# for html
+print(sdp1.count.xt, type = "html", sanitize.colnames.function = identity, file = "RQ1/tables/top_10_clients_publishing_same_day_releases_total/top_10_clients_publishing_same_day_releases_total_pt2.html")
 
 
-### Number of same-day releases per month
-# take monthly snapshots
+
+### 1.3) Same-day releases along the time
+
+# get the monthly snapshots
 snaps = month_snaps(same_day_releases_pattern_1, same_day_releases_pattern_2)
-# snaps$num_releases_pattern1 = ifelse(snaps$num_releases_pattern1 != 0, snaps$num_releases_pattern1 / snaps$num_pgks_pattern1, 0)
-# snaps$num_releases_pattern2 = ifelse(snaps$num_releases_pattern2 != 0, snaps$num_releases_pattern2 / snaps$num_pgks_pattern2, 0)
-snaps[, num_pgks_pattern1 := NULL]
-snaps[, num_pgks_pattern2 := NULL]
-snaps[, releases_per_pgks_pattern1 := NULL]
-snaps[, releases_per_pgks_pattern2 := NULL]
-snaps[, num_pgks_pattern1_proportion := NULL]
-snaps[, num_pgks_pattern2_proportion := NULL]
-snaps$timestamp = as.character(snaps$timestamp)
-snaps.m.1 = melt(snaps, id = "timestamp")
-snaps.m.1
 
-# plot the proportion occurences of each type
-# of same-day release
-
-pdf(file = "RQ1/images/monthly_snaps_total.pdf")
-#png(file = "RQ1/images/monthly_snaps_total.png")
-ggplot(snaps.m.1[timestamp < "2017-05-01"]) +
-  geom_line(aes(ymd(timestamp), value, colour = variable)) +
-  scale_x_date(breaks = date_breaks("6 months"), labels = date_format("%b %Y")) +
-  xlab("") +
-  ylab("Number of same-day releases") +
-  scale_color_grey(name="Same-day release type",
-                   #breaks=c("sd1", "sd2"),
-                   labels=c("Voluntary", "Triggered")) +
-  theme_bw() + theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position="top")
-dev.off()
-
-# plot the number of different provider packages
-# being used by a client package per month
-snaps_deps =  month_snaps_deps(dependencies)
-
-pdf(file = "RQ1/images/monthly_snaps_dependencies_total.pdf")
-#png(file = "RQ1/images/monthly_snaps_dependencies_total.png")
-ggplot(snaps_deps[timestamp < "2017-05-01"], aes(ymd(timestamp), deps_per_package)) +
-  geom_line() +
-  scale_x_date(breaks = date_breaks("6 months"), labels = date_format("%b %Y")) +
-  xlab("") +
-  ylab("Number of dependencies / Number of packages") +
-  theme_bw() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
-dev.off()
-
-snaps = month_snaps(same_day_releases_pattern_1, same_day_releases_pattern_2)
-snaps_deps =  month_snaps_deps(dependencies)
-
-snaps[, num_pgks_pattern1 := NULL]
-snaps[, num_pgks_pattern2 := NULL]
-snaps[, num_releases_pattern1 := NULL]
-snaps[, num_releases_pattern2 := NULL]
-snaps[, num_pgks_pattern1_proportion := NULL]
-snaps[, num_pgks_pattern2_proportion := NULL]
-snaps$timestamp = as.character(snaps$timestamp)
-snaps.m.2 = melt(snaps, id = "timestamp")
+### calculate proportion between triggered and voluntary same-day release
+# get the desired informations for plotting
+snaps.sd_per_total = snaps[, .(same_day_1_per_total_releases, same_day_2_per_total_releases), by = timestamp]
 
 
-# plot both graphs in the same figure
+### calculate number of same-day releases per package
+# get the desired informations for plotting
+snaps.rels_per_package = snaps[, .(releases_per_pgks_pattern1, releases_per_pgks_pattern2), by = timestamp]
+# melt for plot
+snaps.sd_per_total.m = melt(snaps.sd_per_total, id = "timestamp")
+snaps.rels_per_package.m = melt(snaps.rels_per_package, id = "timestamp")
 
+
+### calculate number of same-day releases per number of regular releases
+# calculate how many releases are regular and same-day
+sdr1 = regular_same_day_releases_pt1(same_day_releases_pattern_1, releases)
+sdr2 = regular_same_day_releases_pt2(same_day_releases_pattern_2.cli, dependencies)
+# count how many releases per month 
+packages.pt1 = sdr1[, .(num_releases = .N), by = .(pkg_name = package_name, same_day_1, timestamp = floor_date(ymd_hms(package_version_timestamp_2), "month"))]
+packages.pt2 = sdr2[, .(num_releases = .N), by = .(pkg_name = client_name, same_day_2, timestamp = floor_date(ymd_hms(client_version_timestamp_2), "month"))]
+# transform to format to easily calculate proportions
+packages.pt1.c = data.table::dcast(packages.pt1, formula = pkg_name + timestamp ~ ..., value.var = "num_releases", fill = 0)
+packages.pt2.c = data.table::dcast(packages.pt2, formula = pkg_name + timestamp ~ ..., value.var = "num_releases", fill = 0)
+# adjust header names
+names(packages.pt1.c) = c("pkg_name", "timestamp", "num_regular_releases", "num_sd1_releases")
+names(packages.pt2.c) = c("pkg_name", "timestamp", "num_regular_releases", "num_sd2_releases")
+# calculate total number of same-day and regular releases per month
+packages.pt1.c = packages.pt1.c[, .(total_reg_releases = sum(num_regular_releases), total_sd_releases = sum(num_sd1_releases)), by = .(timestamp)]
+packages.pt2.c = packages.pt2.c[, .(total_reg_releases = sum(num_regular_releases), total_sd_releases = sum(num_sd2_releases)), by = .(timestamp)]
+#calculate proportion of same-day releases
+packages.pt1.c$sdr_poportion = (packages.pt1.c$total_sd_releases / (packages.pt1.c$total_reg_releases + packages.pt1.c$total_sd_releases))
+packages.pt2.c$sdr_poportion = (packages.pt2.c$total_sd_releases / (packages.pt2.c$total_reg_releases + packages.pt2.c$total_sd_releases))
+#get only desidered information
+packages.pt1.c$type = "sdr1"
+packages.pt2.c$type = "sdr2"
+snaps_sdr_per_regular = rbind(packages.pt1.c, packages.pt2.c)
+snaps_sdr_per_regular = snaps_sdr_per_regular[,.(timestamp, sdr_poportion, type)]
+
+# plot three graphs in the same figure
 pdf(file = "RQ1/images/monthly_snaps.pdf")
-p0 = ggplot(snaps.m.1[timestamp < "2017-05-01"]) +
+p0 = ggplot(snaps.sd_per_total.m[timestamp < "2017-05-01"]) +
   geom_line(aes(ymd(timestamp), value, colour = variable)) +
   scale_x_date(breaks = date_breaks("6 months"), labels = date_format("%b %Y")) +
   xlab("") +
-  ylab("# same-day releases") +
+  ylab("# voluntary same-day release\n/ # triggered same-day releases") +
   scale_color_grey(name="Same-day release type",
                    #breaks=c("sd1", "sd2"),
                    labels=c("Voluntary", "Triggered")) +
   theme_bw() + theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position="top")
 
-p1 = ggplot(snaps_deps[timestamp < "2017-05-01"]) +
-  geom_line(aes(ymd(timestamp), deps_per_package, colour = "Dependencies density")) +
-  scale_x_date(breaks = date_breaks("6 months"), labels = date_format("%b %Y")) +
-  xlab("") +
-  ylab("# dependencies\n/ # packages") +
-  scale_color_grey(name="Dependencies density",
-                   #breaks=c("sd1", "sd2"),
-                   labels = c("# dependencies / # packages")) +
-  theme_bw() + theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position="top")
-
-p2 = ggplot(snaps.m.2[timestamp < "2017-05-01"]) +
+p1 = ggplot(snaps.rels_per_package.m[timestamp < "2017-05-01"]) +
   geom_line(aes(ymd(timestamp), value, colour = variable)) +
   scale_x_date(breaks = date_breaks("6 months"), labels = date_format("%b %Y")) +
   xlab("") +
@@ -408,38 +312,17 @@ p2 = ggplot(snaps.m.2[timestamp < "2017-05-01"]) +
                    #breaks=c("sd1", "sd2"),
                    labels=c("Voluntary", "Triggered")) +
   theme_bw() + theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position="top")
+
+p2 = ggplot(snaps_sdr_per_regular[timestamp < "2017-05-01"]) +
+  geom_line(aes(ymd(timestamp), sdr_poportion, colour = type)) +
+  scale_x_date(breaks = date_breaks("6 months"), labels = date_format("%b %Y")) +
+  xlab("") +
+  ylab("# same-day releases\n/ # releases") +
+  scale_color_grey(name="Same-day release type",
+                   #breaks=c("sd1", "sd2"),
+                   labels=c("Voluntary", "Triggered")) +
+  theme_bw() + theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position="top")
 grid.arrange(p0, p1, p2, ncol = 1)
-dev.off()
-
-
-
-
-
-pdf(file = "RQ1/images/monthly_snaps.pdf")
-#png(file = "RQ1/images/monthly_snaps_total.png")
-p0 = ggplot(snaps.m.1[timestamp < "2017-05-01"]) +
-  geom_line(aes(ymd(timestamp), value, colour = variable)) +
-  scale_x_date(breaks = date_breaks("6 months"), labels = date_format("%b %Y")) +
-  xlab("") +
-  ylab("Number of same-day releases") +
-  scale_color_grey(name="Same-day release type",
-                   #breaks=c("sd1", "sd2"),
-                   labels=c("Voluntary", "Triggered")) +
-  theme_bw() + theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position="top")
-dev.off()
-
-p1 = ggplot(snaps.m[timestamp < "2017-05-01"]) +
-  geom_line(aes(ymd(timestamp), value, colour = variable)) +
-  scale_x_date(breaks = date_breaks("6 months"), labels = date_format("%b %Y")) +
-  xlab("") +
-  ylab("Num. of same-day releases / num. of packages") +
-  scale_color_grey(name="Same-day release type",
-                   #breaks=c("sd1", "sd2"),
-                   labels=c("Voluntary", "Triggered")) +
-  theme_bw() + theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position="top")
-
-
-grid.arrange(p0, p1, ncol = 1)
 dev.off()
 
 

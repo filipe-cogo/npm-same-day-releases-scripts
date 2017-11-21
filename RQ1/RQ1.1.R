@@ -35,7 +35,7 @@ setwd(wd)
 source("RQ1/RQ1fnc.R")
 
 ####################################################
-# Calculate number of same-day and regular releases per package
+# Boxplot with number of same-day and regular releases per package
 #####################################################
 
 ### Proportion of voluntary same-day releases (pattern 1) ###
@@ -94,8 +94,8 @@ sdr2.clients = same_day_releases_pattern_2_clients_count(dependencies)
 
 ### Prepare data for plot ###
 
-sdr1.boxplot = sdr1.clients[, .(package_name, proportion_same_day_releses, num_same_day_releases, type = "Voluntary same-day releases")]
-sdr2.boxplot = sdr2.clients[, .(package_name, proportion_same_day_releses, num_same_day_releases, type = "Triggered same-day releases")]
+sdr1.boxplot = sdr1.clients[num_same_day_releases > 0, .(package_name, proportion_same_day_releses, num_same_day_releases, type = "Voluntary same-day releases")]
+sdr2.boxplot = sdr2.clients[num_same_day_releases > 0, .(package_name, proportion_same_day_releses, num_same_day_releases, type = "Triggered same-day releases")]
 sdr.boxplot = rbind(sdr1.boxplot, sdr2.boxplot)
 
 #### Plot the boxplot for the proportions and the total of same-day releases
@@ -124,7 +124,7 @@ p0 = ggplot(sdr.boxplot, aes(x = type, y = proportion_same_day_releses, fill = t
 p1 = ggplot(sdr.boxplot, aes(x = type, y = num_same_day_releases, fill = type)) +
   geom_boxplot() +
   scale_x_discrete(name = "", labels = c("Voluntary releases", "Triggered releases")) +
-  scale_y_continuous(name = "# same-day releases",
+  scale_y_log10(name = "# same-day releases",
                 labels = comma) +
   #ggtitle("Number of packages publishing\nsame-day releases") +
   #scale_fill_brewer(name="Release type",

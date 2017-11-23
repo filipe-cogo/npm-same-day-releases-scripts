@@ -119,7 +119,7 @@ client_releases_using_same_day_ptrn1 = function(dependencies, same_day_releases_
   same_day_release_ptrn1_usage = dependencies[same_day_releases_pattern_1, nomatch = 0]
   
   # count how many client relases uses same-day releases (pattern 1)
-  clients_releases_using_same_day_release_ptrn1 = same_day_release_ptrn1_usage[, .(client_name, client_version_num_1, client_version_num_2, client_version_timestamp_1, client_version_timestamp_2, client_versioning_change = paste(dependency_versioning_type_1, dependency_versioning_type_2, sep = " to " ), package_pttnr1_version_change = ifelse(upgrade, "upgrade", ifelse(rollback, "rollback", "no_change")), package_pttnr1_timestamp_max_satisf_1 = dependency_timestamp_max_satisf_1, package_pttnr1_timestamp_max_satisf_2 = dependency_timestamp_max_satisf_2), by = .(package_pttnr1 = dependency_name, package_pttnr1_version_num_1 = dependency_version_max_satisf_1, package_pttnr1_version_num_2 = dependency_version_max_satisf_2)]
+  clients_releases_using_same_day_release_ptrn1 = same_day_release_ptrn1_usage[, .(client_name, client_version_num_1, client_version_num_2, client_version_timestamp_1, client_version_timestamp_2, client_versioning_change = paste(dependency_versioning_type_1, dependency_versioning_type_2, sep = " to " ), package_pttnr1_version_change = ifelse(upgrade, "upgrade", ifelse(rollback, "rollback", "no_change")), package_pttnr1_timestamp_max_satisf_1 = dependency_timestamp_max_satisf_1, package_pttnr1_timestamp_max_satisf_2 = dependency_timestamp_max_satisf_2, dependency_version_change_was_in), by = .(package_pttnr1 = dependency_name, package_pttnr1_version_num_1 = dependency_version_max_satisf_1, package_pttnr1_version_num_2 = dependency_version_max_satisf_2)]
   
   return(clients_releases_using_same_day_release_ptrn1)
 }
@@ -137,7 +137,7 @@ client_releases_changing_from_same_day_release_ptrn1 = function(dependencies, sa
   # join the tables - calculate all dependencies that involves same-day releases pattern 1
   same_day_release_ptrn1_usage = dependencies[same_day_releases_pattern_1, nomatch = 0]
   
-  clients_releases_using_same_day_release_ptrn1 = same_day_release_ptrn1_usage[, .(.N, client_name, client_version_num_1, client_version_num_2, client_timestamp_1 = client_version_timestamp_1, client_timestamp_2 = client_version_timestamp_2, client_versioning_change = paste(dependency_versioning_type_1, dependency_versioning_type_2, sep = " to " ), package_pttnr1_version_change = ifelse(upgrade, "upgrade", ifelse(rollback, "rollback", "no_change"))), by = .(package_pttnr1 = dependency_name, package_pttnr1_version_num_1 = dependency_version_max_satisf_1, package_pttnr1_version_num_2 = dependency_version_max_satisf_2)]
+  clients_releases_using_same_day_release_ptrn1 = same_day_release_ptrn1_usage[, .(.N, client_name, client_version_num_1, client_version_num_2, client_timestamp_1 = client_version_timestamp_1, client_timestamp_2 = client_version_timestamp_2, client_versioning_change = paste(dependency_versioning_type_1, dependency_versioning_type_2, sep = " to " ), package_pttnr1_version_change = ifelse(upgrade, "upgrade", ifelse(rollback, "rollback", "no_change"))), by = .(package_pttnr1 = dependency_name, package_pttnr1_version_num_1 = dependency_version_max_satisf_1, package_pttnr1_version_num_2 = dependency_version_max_satisf_2, package_pttnr1_timestamp_1 = dependency_timestamp_max_satisf_1, package_pttnr1_timestamp_2 = dependency_timestamp_max_satisf_2)]
   
   return(clients_releases_using_same_day_release_ptrn1)
 }
@@ -211,7 +211,56 @@ regular_same_day_releases_pt2 = function(sdrpt2, deps){
 }
 
 
-month_snaps_regular_same_day_releases = function(rels1, rels2){
+#############################################################
+### Proportion of voluntary same-day releases (pattern 1)
+### Compared to the number of regular releases
+#############################################################
+
+same_day_releases_pattern_1_count = function(releases){
+  # aggregate by client releases
+  sdr1.clients = releases[, .(.N), by = .(package_name, package_version_num_1, package_version_num_2, package_version_timestamp_1, package_version_timestamp_2, same_day_release = same_day_release_1)]
+  sdr1.clients = sdr1.clients[, N := NULL]
   
+  # count the number of releases per client
+  sdr1.clients = sdr1.clients[, .(num_releases = .N), by = .(package_name, same_day_release)]
+  
+  # dcast table to easily calculate proportions
+  sdr1.clients = data.table::dcast(sdr1.clients, formula = package_name ~ ..., value.var = "num_releases", fill = 0)
+  #adjust names
+  names(sdr1.clients) = c("package_name", "num_regular_releases", "num_same_day_releases")
+  
+  #calculate proportions
+  sdr1.clients$proportion_same_day_releases = sdr1.clients$num_same_day_releases / (sdr1.clients$num_same_day_releases + sdr1.clients$num_regular_releases)
+  #sdr1.clients$proportion_regular_releases = sdr1.clients$num_regular_releases / (sdr1.clients$num_same_day_releases + sdr1.clients$num_regular_releases)
+  
+  
+  return(sdr1.clients)
 }
 
+
+#############################################################
+### Proportion of triggered same-day releases (pattern 2) - clients
+### Compared to the number of regular releases
+#############################################################
+
+same_day_releases_pattern_2_clients_count = function(dependencies){
+  # aggregate by provider releases
+  sdr2.clients = dependencies[, .(.N), by = .(package_name = client_name, package_version_num_1 = client_version_num_1, package_version_num_2 = client_version_num_2, package_version_timestamp_1 = client_version_timestamp_1, package_version_timestamp_2 = client_version_timestamp_2, same_day_release = same_day_release_2)]
+  sdr2.clients = sdr2.clients[, .(.N), by = .(package_name, package_version_num_1, package_version_num_2, package_version_timestamp_1, package_version_timestamp_2, same_day_release)]
+  sdr2.clients[, N := NULL]
+  
+  # count the number of releases per client
+  sdr2.clients = sdr2.clients[, .(num_releases = .N), by = .(package_name, same_day_release)]
+  
+  # dcast table to easily calculate proportions
+  sdr2.clients = data.table::dcast(sdr2.clients, formula = package_name ~ ..., value.var = "num_releases", fill = 0)
+  #adjust names
+  names(sdr2.clients) = c("package_name", "num_regular_releases", "num_same_day_releases")
+  
+  #calculate proportions
+  sdr2.clients$proportion_same_day_releases = sdr2.clients$num_same_day_releases / (sdr2.clients$num_same_day_releases + sdr2.clients$num_regular_releases)
+  #sdr2.clients$proportion_regular_releases = sdr2.clients$num_regular_releases / (sdr2.clients$num_same_day_releases + sdr2.clients$num_regular_releases)
+  
+  
+  return (sdr2.clients)
+}

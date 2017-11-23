@@ -54,7 +54,9 @@ same_day_releases_pattern_1_count = function(releases){
   names(sdr1.clients) = c("package_name", "num_regular_releases", "num_same_day_releases")
   
   #calculate proportions
-  sdr1.clients$proportion_same_day_releses = sdr1.clients$num_same_day_releases / (sdr1.clients$num_same_day_releases + sdr1.clients$num_regular_releases)
+  sdr1.clients$proportion_same_day_releases = sdr1.clients$num_same_day_releases / (sdr1.clients$num_same_day_releases + sdr1.clients$num_regular_releases)
+  #sdr1.clients$proportion_regular_releases = sdr1.clients$num_regular_releases / (sdr1.clients$num_same_day_releases + sdr1.clients$num_regular_releases)
+  
   
   return(sdr1.clients)
 }
@@ -78,7 +80,9 @@ same_day_releases_pattern_2_clients_count = function(dependencies){
   names(sdr2.clients) = c("package_name", "num_regular_releases", "num_same_day_releases")
   
   #calculate proportions
-  sdr2.clients$proportion_same_day_releses = sdr2.clients$num_same_day_releases / (sdr2.clients$num_same_day_releases + sdr2.clients$num_regular_releases)
+  sdr2.clients$proportion_same_day_releases = sdr2.clients$num_same_day_releases / (sdr2.clients$num_same_day_releases + sdr2.clients$num_regular_releases)
+  #sdr2.clients$proportion_regular_releases = sdr2.clients$num_regular_releases / (sdr2.clients$num_same_day_releases + sdr2.clients$num_regular_releases)
+  
   
   return (sdr2.clients)
 }
@@ -89,53 +93,39 @@ same_day_releases_pattern_2_clients_count = function(dependencies){
 # Boxplot showing the distribution of different patterns of same-day releases
 #####################################################
 
-sdr1.clients = same_day_releases_pattern_1_count(releases)
-sdr2.clients = same_day_releases_pattern_2_clients_count(dependencies)
+sdr1.clients = same_day_releases_pattern_1_count(releases)[num_same_day_releases > 0 & ((num_regular_releases + num_same_day_releases) >= 10)]
+sdr2.clients = same_day_releases_pattern_2_clients_count(dependencies)[num_same_day_releases > 0 & ((num_regular_releases + num_same_day_releases) >= 10)]
 
 ### Prepare data for plot ###
 
-sdr1.boxplot = sdr1.clients[num_same_day_releases > 0, .(package_name, proportion_same_day_releses, num_same_day_releases, type = "Voluntary same-day releases")]
-sdr2.boxplot = sdr2.clients[num_same_day_releases > 0, .(package_name, proportion_same_day_releses, num_same_day_releases, type = "Triggered same-day releases")]
+sdr1.boxplot = sdr1.clients[, .(package_name, proportion_same_day_releases, num_same_day_releases, type = "Self-driven same-day releases")]
+sdr2.boxplot = sdr2.clients[, .(package_name, proportion_same_day_releases, num_same_day_releases, type = "Provider-driven same-day releases")]
 sdr.boxplot = rbind(sdr1.boxplot, sdr2.boxplot)
 
 #### Plot the boxplot for the proportions and the total of same-day releases
 pdf(file = "RQ1/images/dist_packages_same_day.pdf")
 png(file = "RQ1/images/dist_packages_same_day.png")
-p0 = ggplot(sdr.boxplot, aes(x = type, y = proportion_same_day_releses, fill = type)) +
-  geom_boxplot(position=position_dodge(1)) +
-  #geom_violin(position=position_dodge(1)) +
-  #scale_fill_brewer(name="Same-day release type",
-  #                  labels=c("Voluntary", "Triggered"),
-  #                  palette="RdBu") +
-  scale_x_discrete(name = "", labels = c("Voluntary releases", "Triggered releases")) +
+p0 = ggplot(sdr.boxplot, aes(x = type, y = proportion_same_day_releases, fill = type)) +
+  geom_boxplot() +
+  scale_x_discrete(name="", 
+                   breaks = c("Self-driven same-day releases", "Provider-driven same-day releases"), 
+                   labels=c("Self-driven\nreleases", "Provider-driven\nreleases")) +
+  guides(fill=FALSE) +
+  scale_fill_viridis(discrete = TRUE) +
   scale_y_continuous(name = "# same-day releases / # releases",
                      labels = comma) +
-  #stat_summary(fun.y="median", geom="point", position = position_dodge(1)) +
-  #ggtitle("Proportion of packages publishing\nsame-day releases") +
-  #scale_color_viridis() +
-  scale_fill_grey(name="Same-day \nrelease type",
-                  breaks=c("sd1", "sd2"),
-                  labels=c("Voluntary", "Triggered"),
-                  guide=FALSE,
-                  start = 0.65, end = 1.0) +
   theme(legend.position="right", plot.title = element_text(hjust = 1.0)) +
   theme_bw()
 
 p1 = ggplot(sdr.boxplot, aes(x = type, y = num_same_day_releases, fill = type)) +
   geom_boxplot() +
-  scale_x_discrete(name = "", labels = c("Voluntary releases", "Triggered releases")) +
+  scale_x_discrete(name="",
+                   breaks = c("Self-driven same-day releases", "Provider-driven same-day releases"), 
+                   labels=c("Self-driven\nreleases", "Provider-driven\nreleases")) +
   scale_y_log10(name = "# same-day releases",
                 labels = comma) +
-  #ggtitle("Number of packages publishing\nsame-day releases") +
-  #scale_fill_brewer(name="Release type",
-  #                  #breaks=c("same_day_1", "same_day_2"),
-  #                  labels=c("Same-day (Pattern 1)", "Triggered (Pattern 2)"),
-  #                  palette="RdBu") +
-  scale_fill_grey(name="Same-day \nrelease type",
-                  breaks=c("sd1", "sd2"),
-                  labels=c("Voluntary", "Triggered"),
-                  guide=FALSE,
-                  start = 0.65, end = 1.0) +
+  guides(fill=FALSE) +
+  scale_fill_viridis(discrete = TRUE) +
   theme(plot.title = element_text(hjust = 0.5), legend.position="right") +
   theme_bw()
 
@@ -147,38 +137,68 @@ dev.off()
 # Top-10 packages performing same-day releases, on both patterrns
 #####################################################
 
-sdr1.clients = same_day_releases_pattern_1_count(releases)
-sdr2.clients = same_day_releases_pattern_2_clients_count(dependencies)
+sdr1.clients = same_day_releases_pattern_1_count(releases)[num_same_day_releases > 0 & ((num_regular_releases + num_same_day_releases) >= 10)]
+sdr2.clients = same_day_releases_pattern_2_clients_count(dependencies)[num_same_day_releases > 0 & ((num_regular_releases + num_same_day_releases) >= 10)]
 
 ### For voluntary same-day releases (pattern 1) ###
 
-# get top 10 packages publishing same-day releases
+# get top 10 packages publishing same-day releases, sorted by total of same-day releases
 sdr1.clients.top10 = sdr1.clients[order(-num_same_day_releases)][1:10]
+
+mean(sdr1.clients.top10$proportion_same_day_releases)
 
 ### export to latex
 # create xtable
-sdr1.xt = xtable(sdr1.clients.top10, caption = "Proportion of voluntary same-day releases")
+sdr1.xt = xtable(sdr1.clients.top10, caption = "Top-10 packages publishing self-driven same-day releases sorted by number of same-day releases")
 # adjust header names
-names(sdr1.xt) = c("\\pbox{20cm}{Package name}", "\\pbox{20cm}{Number of regular releases}", "\\pbox{20cm}{Number of same-day releases}", "\\pbox{20cm}{Proportion of same-day releases}")
+names(sdr1.xt) = c("\\pbox{20cm}{Package \\\\name}", "\\pbox{20cm}{Number of \\\\regular releases}", "\\pbox{20cm}{Number of \\\\same-day releases}", "\\pbox{20cm}{Proportion of \\\\same-day releases}")
 # adjust significant digits
 digits(sdr1.xt) <- c(0,0,0,0,3)
 # print to file
-print(sdr1.xt, sanitize.colnames.function = identity, file = "RQ1/tables/top_10_clients_publishing_same_day_releases_proportion/top_10_clients_publishing_same_day_releases_proportion_pt1.tex")
+print(sdr1.xt, sanitize.colnames.function = identity, file = "RQ1/tables/top_10_clients_publishing_same_day_releases/top_10_clients_publishing_same_day_releases_total_pt1.tex")
+
+# get top 10 packages publishing same-day releases, sorted by proportion of same-day releases
+sdr1.clients.top10 = sdr1.clients[order(-proportion_same_day_releases)][1:10]
+
+### export to latex
+# create xtable
+sdr1.xt = xtable(sdr1.clients.top10, caption = "Top-10 packages publishing self-driven same-day releases sorted by proportion of same-day releases")
+# adjust header names
+names(sdr1.xt) = c("\\pbox{20cm}{Package \\\\name}", "\\pbox{20cm}{Number of \\\\regular releases}", "\\pbox{20cm}{Number of \\\\same-day releases}", "\\pbox{20cm}{Proportion of \\\\same-day releases}")
+# adjust significant digits
+digits(sdr1.xt) <- c(0,0,0,0,3)
+# print to file
+print(sdr1.xt, sanitize.colnames.function = identity, file = "RQ1/tables/top_10_clients_publishing_same_day_releases/top_10_clients_publishing_same_day_releases_proportion_pt1.tex")
+
+
 
 ### For triggered same-day releases (pattern 2) ###
 
-# get top 10 packages publishing same-day releases
+# get top 10 packages publishing same-day releases, sorted by total of same-day releases
 sdr2.clients.top10 = sdr2.clients[order(-num_same_day_releases)][1:10]
 
 ### export to latex
 # create xtable
-sdr2.xt = xtable(sdr2.clients.top10, caption = "Proportion of triggered same-day releases")
+sdr2.xt = xtable(sdr2.clients.top10, caption = "Top-10 packages publishing provider-driven same-day releases sorted by number of same-day releases")
 # adjust header names
-names(sdr2.xt) = c("\\pbox{20cm}{Package name}", "\\pbox{20cm}{Number of regular releases}", "\\pbox{20cm}{Number of same-day releases}", "\\pbox{20cm}{Proportion of same-day releases}")
+names(sdr2.xt) = c("\\pbox{20cm}{Package \\\\name}", "\\pbox{20cm}{Number of \\\\regular releases}", "\\pbox{20cm}{Number of \\\\same-day releases}", "\\pbox{20cm}{Proportion of \\\\same-day releases}")
 # adjust significant digits
 digits(sdr2.xt) <- c(0,0,0,0,3)
 # print to file
-print(sdr2.xt, sanitize.colnames.function = identity, file = "RQ1/tables/top_10_clients_publishing_same_day_releases_proportion/top_10_clients_publishing_same_day_releases_proportion_pt2.tex")
+print(sdr2.xt, sanitize.colnames.function = identity, file = "RQ1/tables/top_10_clients_publishing_same_day_releases/top_10_clients_publishing_same_day_releases_total_pt2.tex")
+
+# get top 10 packages publishing same-day releases, sorted by proportion of same-day releases
+sdr2.clients.top10 = sdr2.clients[order(-proportion_same_day_releases)][1:10]
+
+### export to latex
+# create xtable
+sdr2.xt = xtable(sdr2.clients.top10, caption = "Top-10 packages publishing provider-driven same-day releases sorted by proportion of same-day releases")
+# adjust header names
+names(sdr2.xt) = c("\\pbox{20cm}{Package \\\\name}", "\\pbox{20cm}{Number of \\\\regular releases}", "\\pbox{20cm}{Number of \\\\same-day releases}", "\\pbox{20cm}{Proportion of \\\\same-day releases}")
+# adjust significant digits
+digits(sdr2.xt) <- c(0,0,0,0,3)
+# print to file
+print(sdr2.xt, sanitize.colnames.function = identity, file = "RQ1/tables/top_10_clients_publishing_same_day_releases/top_10_clients_publishing_same_day_releases_proportion_pt2.tex")
 
 
 
@@ -235,24 +255,26 @@ proportion_same_day_releases = rbind(sdr1.proportion_same_day_releases[, .(times
 
 png(file = "RQ1/images/monthly_snaps.png")
 pdf(file = "RQ1/images/monthly_snaps.pdf")
-p0 = ggplot(same_day_releases_per_package[timetamp > "2010-12-01" & timestamp < "2017-05-01"]) +
+p0 = ggplot(same_day_releases_per_package[timestamp > "2010-12-01" & timestamp < "2017-05-01"]) +
   geom_line(aes(ymd(timestamp), releases_per_packages, colour = type)) +
+  scale_color_viridis(name="Same-day release pattern",
+                     breaks=c("Voluntary", "Triggered"),
+                     labels=c("Self-driven", "Provider-driven"),
+                     discrete = TRUE, end = 0.5) +
   scale_x_date(breaks = date_breaks("6 months"), labels = date_format("%b %Y")) +
   xlab("") +
   ylab("# same-day releases\n/ # packages") +
-  scale_color_grey(name="Same-day release pattern",
-                   #breaks=c("sd1", "sd2"),
-                   labels=c("Voluntary", "Triggered"), start = 0.7, end = 0.0) +
   theme_bw() + theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position="top")
 
-p1 = ggplot(proportion_same_day_releases[timetamp > "2010-12-01" & timestamp < "2017-05-01"]) +
+p1 = ggplot(proportion_same_day_releases[timestamp > "2010-12-01" & timestamp < "2017-05-01"]) +
   geom_line(aes(ymd(timestamp), proportion_same_day_releases, colour = type)) +
   scale_x_date(breaks = date_breaks("6 months"), labels = date_format("%b %Y")) +
   xlab("") +
   ylab("# same-day releases\n/ # releases") +
-  scale_color_grey(name="Same-day release pattern",
-                   #breaks=c("sd1", "sd2"),
-                   labels=c("Voluntary", "Triggered"), start = 0.7, end = 0.0) +
+  scale_color_viridis(name="Same-day release pattern",
+                      breaks=c("Voluntary", "Triggered"),
+                      labels=c("Self-driven", "Provider-driven"),
+                      discrete = TRUE, end = 0.5) +
   theme_bw() + theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position="top")
 
 grid.arrange(p0, p1, ncol = 1)

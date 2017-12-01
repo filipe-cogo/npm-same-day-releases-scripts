@@ -528,7 +528,7 @@ plot_violin = function(
   
   if(!is.null(groupcol)){
     if (coloured){
-      p <- p + scale_fill_viridis(discrete = TRUE)
+      p <- p + scale_fill_viridis(name=legend_title, labels = legend_labels, discrete = TRUE)
     } else {
       p <- p + scale_fill_grey(name=legend_title, start = 0.65, end = 1.0, labels = legend_labels)  
     }

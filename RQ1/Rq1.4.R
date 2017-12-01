@@ -78,13 +78,13 @@ ggplot(semver_dist_pt1.prop, aes(x = variable, y = value, fill = variable)) +
   geom_boxplot() +
   guides(fill=FALSE) +
   scale_fill_viridis(discrete = TRUE) +
-  scale_x_discrete(name="Level of change",
+  scale_x_discrete(name="",
                    breaks=c("major_proportion", "minor_proportion", "patch_proportion", "pre_release_proportion", "build_proportion"),
                    labels=c("Major", "Minor", "Patch", "Pre-release", "Build")) +
   scale_y_continuous(name = "Proportion of semantic version level change",
                      labels = comma) +
-  #ggtitle("Proportion of semantic version number changes\non same-day releases per package (Pattern 1)") +
-  theme_bw() + theme(legend.position="bottom")
+  ggtitle("Self-driven same-day releases") +
+  theme_bw() + theme(plot.title = element_text(hjust = 0.5), legend.position="bottom")
 dev.off()
 
 
@@ -99,8 +99,8 @@ semver_dist_pt2_provider = same_day_releases_pattern_2[, .(count = .N, role = "P
 
 semver_dist_pt2 = rbind(semver_dist_pt2_client, semver_dist_pt2_provider)
 
-#pdf(file = "RQ1/images/semver_change_dist_pt2.pdf")
-png(file = "RQ1/images/semver_change_dist_pt2.png")
+pdf(file = "RQ1/images/semver_change_dist_pt2.pdf")
+#png(file = "RQ1/images/semver_change_dist_pt2.png")
 ggplot(semver_dist_pt2, aes(x = change, y = count, fill = change)) +
   geom_boxplot() +
   scale_x_discrete(name="Level of change",
@@ -147,20 +147,20 @@ semver_dist_pt2.melt.provider$role = "Provider"
 # bind rows
 semver_dist_pt2.prop = rbind(semver_dist_pt2.melt.client, semver_dist_pt2.melt.provider)
 
-#pdf(file = "RQ1/images/semver_change_dist_pt2.pdf")
-png(file = "RQ1/images/semver_change_dist_pt2_proportion.png")
+pdf(file = "RQ1/images/semver_change_dist_pt2.pdf")
+#png(file = "RQ1/images/semver_change_dist_pt2_proportion.png")
 ggplot(semver_dist_pt2.prop, aes(x = variable, y = value, fill = variable)) +
   geom_boxplot() +
   facet_grid( ~ role, scales="free") +
   guides(fill=FALSE) +
   scale_fill_viridis(discrete = TRUE) +
-  scale_x_discrete(name="Level of change",
+  scale_x_discrete(name="",
                    breaks=c("major_proportion", "minor_proportion", "patch_proportion", "pre_release_proportion", "build_proportion"),
                    labels=c("Major", "Minor", "Patch", "Pre-release", "Build")) +
   scale_y_continuous(name = "Proportion of semantic version level change",
                      labels = comma) +
-  #ggtitle("Proportion of semantic version number changes\non same-day releases per package (Pattern 1)") +
-  theme_bw() + theme(legend.position="bottom")
+  ggtitle("Provider-driven same-day release") +
+  theme_bw() + theme(plot.title = element_text(hjust = 0.5), legend.position="bottom")
 dev.off()
 
 ### plot 2 graphs in one figure

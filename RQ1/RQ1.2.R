@@ -40,6 +40,9 @@ source("RQ1/iPlot4R.R")
 same_day_releases_pattern_1 = releases[same_day_release_1 == TRUE]
 same_day_releases_pattern_2 = dependencies[same_day_release_2 == TRUE]
 
+same_day_releases_pattern_1[, .(num_same_day_releases = .N), by = package_name][order(-num_same_day_releases)][1:100]
+cbind(same_day_releases_pattern_2[, .(num_client_same_day_releases = .N), by = client_name][order(-num_client_same_day_releases)][1:100], same_day_releases_pattern_2[, .(num_provider_same_day_releases = .N), by = dependency_name][order(-num_provider_same_day_releases)][1:100])
+
 
 ####################################################
 ### Violinplot with time to update to same-day releases vs.
@@ -238,23 +241,20 @@ clients_sd1.melt[, change_or_not := ifelse(variable == "no_change_prop", "Resolv
 
 pdf(file = "RQ1/images/after_sd1_adoption.pdf")
 png(file = "RQ1/images/after_sd1_adoption.png")
-ggplot(clients_sd1.melt, aes(x = "", y = value, fill = variable)) +
+ggplot(clients_sd1.melt, aes(x = variable, y = value, fill = variable)) +
   geom_boxplot() +
-  facet_grid( ~ change_or_not, scales="free") +
-  scale_y_continuous(name = "Proportion of resolution type",
+  facet_grid( ~ change_or_not, scales = "free") +
+  guides(fill=FALSE) +
+  scale_fill_viridis(discrete = TRUE) +
+  scale_y_continuous(name = "Proportion of change",
                      labels = comma) +
-  xlab("") +
-  #scale_x_discrete() +
-  #guides(fill=FALSE) +
-  scale_fill_viridis(name="",
-                     breaks=c("no_change_prop", "upgrade_prop", "rollback_prop"),
-                     labels=c("No change", "Upgrade", "Downgrade"),
-                     discrete = TRUE) +
+   scale_x_discrete(name="",
+                    breaks = c("no_change_prop", "upgrade_prop", "rollback_prop"),
+                    labels = c("No change", "Upgrade", "Downgrade")) +
   #ggtitle("Distribution of same-day releases usage by client") +
   theme_bw() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position="bottom")
- dev.off()
-
+  theme(legend.position="bottom")
+dev.off()
 
 ####################################################
 ### How many times each client used a same-day 

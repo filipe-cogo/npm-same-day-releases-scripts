@@ -110,7 +110,7 @@ month_snaps_deps = function(depoendencies){
 ### releases on pattern 1
 ####################################
 
-client_releases_using_same_day_ptrn1 = function(dependencies, same_day_releases_pattern_1){
+client_releases_using_same_day = function(dependencies, same_day_releases_pattern_1){
   #set key for joining tables with dependencies and same-day releases
   setkey(dependencies, dependency_name, dependency_version_max_satisf_2)
   setkey(same_day_releases_pattern_1, package_name, package_version_num_2)
@@ -119,7 +119,8 @@ client_releases_using_same_day_ptrn1 = function(dependencies, same_day_releases_
   same_day_release_ptrn1_usage = dependencies[same_day_releases_pattern_1, nomatch = 0]
   
   # count how many client relases uses same-day releases (pattern 1)
-  clients_releases_using_same_day_release_ptrn1 = same_day_release_ptrn1_usage[, .(client_name, client_version_num_1, client_version_num_2, client_version_timestamp_1, client_version_timestamp_2, client_versioning_change = paste(dependency_versioning_type_1, dependency_versioning_type_2, sep = " to " ), package_pttnr1_version_change = ifelse(upgrade, "upgrade", ifelse(rollback, "rollback", "no_change")), package_pttnr1_timestamp_max_satisf_1 = dependency_timestamp_max_satisf_1, package_pttnr1_timestamp_max_satisf_2 = dependency_timestamp_max_satisf_2, dependency_version_change_was_in), by = .(package_pttnr1 = dependency_name, package_pttnr1_version_num_1 = dependency_version_max_satisf_1, package_pttnr1_version_num_2 = dependency_version_max_satisf_2)]
+  #clients_releases_using_same_day_release_ptrn1 = same_day_release_ptrn1_usage[, .(client_name, client_version_num_1, client_version_num_2, client_version_timestamp_1, client_version_timestamp_2, client_versioning_change = paste(dependency_versioning_type_1, dependency_versioning_type_2, sep = " to " ), package_pttnr1_version_change = ifelse(upgrade, "upgrade", ifelse(rollback, "rollback", "no_change")), package_pttnr1_timestamp_max_satisf_1 = dependency_timestamp_max_satisf_1, package_pttnr1_timestamp_max_satisf_2 = dependency_timestamp_max_satisf_2, package_pttnr1_version_change = dependency_version_change_was_in), by = .(package_pttnr1 = dependency_name, package_pttnr1_version_num_1 = dependency_version_max_satisf_1, package_pttnr1_version_num_2 = dependency_version_max_satisf_2)]
+  clients_releases_using_same_day_release_ptrn1 = same_day_release_ptrn1_usage[, .(client_name, client_version_num_1, client_version_num_2, client_version_timestamp_1, client_version_timestamp_2, client_versioning_change = paste(dependency_versioning_type_1, dependency_versioning_type_2, sep = " to " ), package_version_change = ifelse(upgrade, "upgrade", ifelse(rollback, "rollback", "no_change")), package_timestamp_max_satisf_1 = dependency_timestamp_max_satisf_1, package_timestamp_max_satisf_2 = dependency_timestamp_max_satisf_2, package_semver_change = dependency_version_change_was_in, package_name = dependency_name, package_version_num_1 = dependency_version_max_satisf_1, package_version_num_2 = dependency_version_max_satisf_2)]
   
   return(clients_releases_using_same_day_release_ptrn1)
 }
@@ -263,4 +264,47 @@ same_day_releases_pattern_2_clients_count = function(dependencies){
   
   
   return (sdr2.clients)
+}
+
+
+#################################################################
+#####     Provider-driven same-day releases - clients       #####
+#################################################################
+
+same_day_releases_pattern_2.clients = function(dependencies){
+  #get releases that have a provider with less than 
+  #24 hours difference from the client
+  clients_releases = dependencies[,.GRP,by = .(package_name = client_name, 
+                                               release_order, 
+                                               package_version_num_1 = client_version_num_1, 
+                                               package_version_num_2 = client_version_num_2,
+                                               package_version_change_was_in = client_version_change_was_in,
+                                               package_version_timestamp_1 = client_version_timestamp_1,
+                                               package_version_timestamp_2 = client_version_timestamp_2,
+                                               package_version_timestamp_diff_secs = client_version_timestamp_diff_secs,
+                                               same_day_release_2
+  )]
+  clients_releases[, GRP := NULL]
+  
+  #find rows that are exclusively regular releases
+  reg_releases_2 = dcast(clients_releases, ... ~ same_day_release_2, value.var = "same_day_release_2")[`FALSE` == FALSE & is.na(`TRUE`), .(package_name, 
+                                                                                                                                           release_order,
+                                                                                                                                           package_version_num_1, 
+                                                                                                                                           package_version_num_2, 
+                                                                                                                                           package_version_change_was_in,
+                                                                                                                                           package_version_timestamp_1,
+                                                                                                                                           package_version_timestamp_2,
+                                                                                                                                           same_day_release_2 = `FALSE`)]
+  #find rows that are same_day_release_2
+  sdr_releases_2 = dcast(clients_releases, ... ~ same_day_release_2, value.var = "same_day_release_2")[`TRUE` == TRUE, .(package_name, 
+                                                                                                                         release_order,
+                                                                                                                         package_version_num_1, 
+                                                                                                                         package_version_num_2, 
+                                                                                                                         package_version_change_was_in,
+                                                                                                                         package_version_timestamp_1,
+                                                                                                                         package_version_timestamp_2,
+                                                                                                                         same_day_release_2 = `TRUE`)]
+  stopifnot(nrow(dependencies[,.GRP,by=.(client_name, release_order)]) ==  nrow(reg_releases_2) + nrow(sdr_releases_2))
+  
+  return(rbind(reg_releases_2,sdr_releases_2))
 }

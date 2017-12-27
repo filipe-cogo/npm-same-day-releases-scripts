@@ -504,7 +504,7 @@ plot_violin = function(
   
   #Adds the violin plot
   if(split == FALSE){
-    p <- p + geom_violin(position = dodge, scale = scale, trim = trim, colour = "black")  
+    p <- p + geom_violin(position = dodge, scale = scale, trim = trim, colour = "black", adjust = 0.5) 
     
     #Adds the boxplot if requested
     if(showboxplot == TRUE){
@@ -554,7 +554,9 @@ plot_violin = function(
     p <- p + coord_flip()
   }
   
-  print_plot(p, outfile)
+  #print_plot(p, outfile)
+  
+  return (p)
 }
 
 ## custom median function to be used by split violins
@@ -974,6 +976,34 @@ print_plot = function(p, outfile = NULL, width=16, height=9, dpi=100){
     ggsave(outfile, plot = p, width=width, height=height, dpi=dpi)
   }
   p
+}
+
+grid_arrange_shared_legend <- function(..., ncol = length(list(...)), nrow = 1, position = c("bottom", "right")) {
+  plots <- list(...)
+  position <- match.arg(position)
+  g <- ggplotGrob(plots[[1]] + theme(legend.position = position))$grobs
+  legend <- g[[which(sapply(g, function(x) x$name) == "guide-box")]]
+  lheight <- sum(legend$height)
+  lwidth <- sum(legend$width)
+  gl <- lapply(plots, function(x) x + theme(legend.position="none"))
+  gl <- c(gl, ncol = ncol, nrow = nrow)
+  
+  combined <- switch(position,
+                     "bottom" = arrangeGrob(do.call(arrangeGrob, gl),
+                                            legend,
+                                            ncol = 1,
+                                            heights = unit.c(unit(1, "npc") - lheight, lheight)),
+                     "right" = arrangeGrob(do.call(arrangeGrob, gl),
+                                           legend,
+                                           ncol = 2,
+                                           widths = unit.c(unit(1, "npc") - lwidth, lwidth)))
+  
+  grid.newpage()
+  grid.draw(combined)
+  
+  # return gtable invisibly
+  invisible(combined)
+  
 }
 
 #Trim images inside R using imager (relies on GraphicsMagick)

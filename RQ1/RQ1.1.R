@@ -38,8 +38,6 @@ source("RQ1/RQ1fnc.R")
 # Boxplot with number of same-day and regular releases per package
 #####################################################
 
-### Proportion of voluntary same-day releases (pattern 1) ###
-
 same_day_releases_pattern_1_count = function(releases){
   # aggregate by client releases
   sdr1.clients = releases[, .(.N), by = .(package_name, package_version_num_1, package_version_num_2, package_version_timestamp_1, package_version_timestamp_2, same_day_release = same_day_release_1)]
@@ -54,16 +52,13 @@ same_day_releases_pattern_1_count = function(releases){
   names(sdr1.clients) = c("package_name", "num_regular_releases", "num_same_day_releases")
   
   #calculate proportions
+  sdr1.clients$total_releases = sdr1.clients$num_same_day_releases + sdr1.clients$num_regular_releases
   sdr1.clients$proportion_same_day_releases = sdr1.clients$num_same_day_releases / (sdr1.clients$num_same_day_releases + sdr1.clients$num_regular_releases)
-  #sdr1.clients$proportion_regular_releases = sdr1.clients$num_regular_releases / (sdr1.clients$num_same_day_releases + sdr1.clients$num_regular_releases)
-  
   
   return(sdr1.clients)
 }
 
-
-
-### Proportion of triggered same-day releases (pattern 2) - clients ###
+### Proportion of provider-driven same-day releases - clients ###
 
 same_day_releases_pattern_2_clients_count = function(dependencies){
   # aggregate by provider releases
@@ -80,13 +75,11 @@ same_day_releases_pattern_2_clients_count = function(dependencies){
   names(sdr2.clients) = c("package_name", "num_regular_releases", "num_same_day_releases")
   
   #calculate proportions
+  sdr2.clients$total_releases = sdr2.clients$num_same_day_releases + sdr2.clients$num_regular_releases
   sdr2.clients$proportion_same_day_releases = sdr2.clients$num_same_day_releases / (sdr2.clients$num_same_day_releases + sdr2.clients$num_regular_releases)
-  #sdr2.clients$proportion_regular_releases = sdr2.clients$num_regular_releases / (sdr2.clients$num_same_day_releases + sdr2.clients$num_regular_releases)
-  
   
   return (sdr2.clients)
 }
-
 
 
 ####################################################
@@ -96,16 +89,58 @@ same_day_releases_pattern_2_clients_count = function(dependencies){
 sdr1.clients = same_day_releases_pattern_1_count(releases)[num_same_day_releases > 0 & ((num_regular_releases + num_same_day_releases) >= 10)]
 sdr2.clients = same_day_releases_pattern_2_clients_count(dependencies)[num_same_day_releases > 0 & ((num_regular_releases + num_same_day_releases) >= 10)]
 
-### Prepare data for plot ###
+summary(sdr1.clients)
+summary(sdr2.clients)
 
-sdr1.boxplot = sdr1.clients[, .(package_name, proportion_same_day_releases, num_same_day_releases, type = "Self-driven same-day releases")]
-sdr2.boxplot = sdr2.clients[, .(package_name, proportion_same_day_releases, num_same_day_releases, type = "Provider-driven same-day releases")]
+### Prepare data for plot ###
+sdr1.boxplot = sdr1.clients[, .(package_name, proportion_same_day_releases, ratio_regular_same_day_release = (num_regular_releases/num_same_day_releases), type = "Self-driven same-day releases")]
+sdr2.boxplot = sdr2.clients[, .(package_name, proportion_same_day_releases, ratio_regular_same_day_release = (num_regular_releases/num_same_day_releases), type = "Provider-driven same-day releases")]
 sdr.boxplot = rbind(sdr1.boxplot, sdr2.boxplot)
 
-#### Plot the boxplot for the proportions and the total of same-day releases
+summary(sdr1.boxplot)
+summary(sdr2.boxplot)
+
+#### Plot the scatterplot for the proportions and the total of same-day releases
 pdf(file = "RQ1/images/dist_packages_same_day.pdf")
-png(file = "RQ1/images/dist_packages_same_day.png")
-p0 = ggplot(sdr.boxplot, aes(x = type, y = proportion_same_day_releases, fill = type)) +
+p0 = ggplot(sdr1.clients, aes(x = proportion_same_day_releases, y = total_releases)) +
+  geom_point(aes(colour = proportion_same_day_releases)) +
+  scale_x_continuous(name = "Proportion of same-day releases\n") +
+  scale_y_log10(name = "Number of releases",
+                labels = comma) +
+  geom_hline(yintercept = median(sdr1.clients$total_releases), linetype = "dashed", colour = "red", size = 1) +
+  geom_vline(xintercept = median(sdr1.clients$proportion_same_day_releases), linetype = "dashed", colour = "red", size = 1) +
+  guides(fill=FALSE) +
+  scale_colour_viridis(guide = 'none') +
+  ggtitle("Self-driven") +
+  theme_bw() +
+  theme(plot.title = element_text(size = 15, hjust = 0.5), axis.text = element_text(size = 13), axis.title = element_text(size = 14))
+
+p1 = ggplot(sdr2.clients, aes(x = proportion_same_day_releases, y = total_releases)) +
+  geom_point(aes(colour = proportion_same_day_releases)) +
+  scale_x_continuous(name = "Proportion of same-day releases\n") +
+  scale_y_log10(name = "Number of releases",
+                labels = comma) +
+  geom_hline(yintercept = median(sdr2.clients$total_releases), linetype = "dashed", colour = "red", size = 1) +
+  geom_vline(xintercept = median(sdr2.clients$proportion_same_day_releases), linetype = "dashed", colour = "red", size = 1) +
+  guides(fill=FALSE) +
+  scale_colour_viridis(guide = 'none') +
+  ggtitle("Provider-driven") +
+  theme_bw() +
+  theme(plot.title = element_text(size = 15, hjust = 0.5), axis.text = element_text(size = 13), axis.title = element_text(size = 14), legend.position="right")
+
+p2 = ggplot(sdr.boxplot, aes(x = type, y = ratio_regular_same_day_release, fill = type)) +
+  geom_boxplot() +
+  scale_x_discrete(name="", 
+                   breaks = c("Self-driven same-day releases", "Provider-driven same-day releases"), 
+                   labels=c("Self-driven\nreleases", "Provider-driven\nreleases")) +
+  guides(fill=FALSE) +
+  scale_fill_viridis(discrete = TRUE) +
+  scale_y_log10(name = "# regular releases / # same-day releases",
+                     labels = comma) +
+  theme_bw() +
+  theme(legend.position="right", axis.text = element_text(size = 13), axis.title = element_text(size = 14), plot.title = element_text(hjust = 1.0))
+
+p3 = ggplot(sdr.boxplot, aes(x = type, y = proportion_same_day_releases, fill = type)) +
   geom_boxplot() +
   scale_x_discrete(name="", 
                    breaks = c("Self-driven same-day releases", "Provider-driven same-day releases"), 
@@ -113,23 +148,11 @@ p0 = ggplot(sdr.boxplot, aes(x = type, y = proportion_same_day_releases, fill = 
   guides(fill=FALSE) +
   scale_fill_viridis(discrete = TRUE) +
   scale_y_continuous(name = "# same-day releases / # releases",
-                     labels = comma) +
-  theme(legend.position="right", plot.title = element_text(hjust = 1.0)) +
-  theme_bw()
-
-p1 = ggplot(sdr.boxplot, aes(x = type, y = num_same_day_releases, fill = type)) +
-  geom_boxplot() +
-  scale_x_discrete(name="",
-                   breaks = c("Self-driven same-day releases", "Provider-driven same-day releases"), 
-                   labels=c("Self-driven\nreleases", "Provider-driven\nreleases")) +
-  scale_y_log10(name = "# same-day releases",
                 labels = comma) +
-  guides(fill=FALSE) +
-  scale_fill_viridis(discrete = TRUE) +
-  theme(plot.title = element_text(hjust = 0.5), legend.position="right") +
-  theme_bw()
+  theme_bw() +
+  theme(legend.position="right", axis.text = element_text(size = 13), axis.title = element_text(size = 14), plot.title = element_text(hjust = 1.0))
 
-grid.arrange(p0, p1, ncol = 2)
+grid.arrange(p0, p1, p2, p3, layout_matrix = rbind(c(0,1), c(2,3)))
 dev.off()
 
 
@@ -280,12 +303,10 @@ p1 = ggplot(proportion_same_day_releases[timestamp > "2010-12-01" & timestamp < 
 grid.arrange(p0, p1, ncol = 1)
 dev.off()
 
-
-
 ### Number of same-day releases vs. number of regular releases per month ###
 
 # separete number of same-day releases
-sdr1.num_sd = sdr1.month_snaps[same_day_release == TRUE][, .(timestamp, total_releases = total_releases, type = "sdr1")]
+  sdr1.num_sd = sdr1.month_snaps[same_day_release == TRUE][, .(timestamp, total_releases = total_releases, type = "sdr1")]
 sdr2.num_sd = sdr2.month_snaps[same_day_release == TRUE][, .(timestamp, total_releases = total_releases, type = "sdr2")]
 
 sdr1.num_sd = sdr1.num_sd[order(timestamp)][timestamp > "2010-12-01" & timestamp < "2017-05-01"]
